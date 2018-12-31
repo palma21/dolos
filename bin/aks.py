@@ -42,7 +42,7 @@ def requests_retry_session(retries=3, backoff_factor=0.3, status_forcelist=(500,
 
 def setup_custom_logger(name):
     formatter = logging.Formatter(fmt='%(asctime)s %(levelname)-8s %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
-    handler = logging.FileHandler(os.path.join(DIR_PARENT, 'log', 'aks.txt'), mode='a')
+    handler = logging.FileHandler(os.path.join(DIR_PARENT, 'log', config['aks']['location']+'-aks.txt'), mode='a')
     handler.setFormatter(formatter)
     screen_handler = logging.StreamHandler(stream=sys.stdout)
     screen_handler.setFormatter(formatter)
@@ -63,7 +63,7 @@ def log(message):
 def csvlog(category,timetaken):
     with open(os.path.join(DIR_PARENT, 'log', 'aks.csv'), 'a') as csvFile:
       writer = csv.writer(csvFile, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
-      writer.writerow([RUNID, datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"), category, timetaken])
+      writer.writerow([RUNID, config['aks']['location'], datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"), category, timetaken])
 
 def status(code):
     if code != 0:
@@ -73,17 +73,17 @@ def status(code):
 
 def cleanup():
     global RUNID
-    RUNID = uuid.uuid4().hex
+    RUNID = uuid.uuid4().hex[:4] + "i" # append a character to force excel to treat column as text
     log("Current run id: %s" % RUNID)
 
     log("Attempting to delete cluster")
     destroy_start_time = datetime.datetime.now()
-    az(['aks', 'delete', '--name', 'dolos', '--resource-group', 'dolos', '--yes'])
+    az(['group', 'delete', '--name', 'dolos', '--yes'])
     destroy_end_time = datetime.datetime.now()
     log("Cluster delete finished")
     destroy_total_time = destroy_end_time - destroy_start_time
     log("Total destroy time taken: %s" % str(destroy_total_time))
-    csvlog("DELETE",str(destroy_total_time))
+    #csvlog("DELETE",str(destroy_total_time))
     try:
         subprocess.check_output(['kubectl', 'config', 'unset', 'current-context'])
         subprocess.check_output(['kubectl', 'config', 'unset', 'users.clusterUser_dolos_dolos'])
@@ -104,6 +104,11 @@ if __name__ == '__main__':
             create_start_time = datetime.datetime.now()
             aks_create_start_time = create_start_time
             log("Starting test")
+
+            log("Creating Resource Group")
+            group_create = az(['group', 'create', '--name', 'dolos', '--location', config['aks']['location']])
+            if not status(group_create):
+                break
 
             log("Creating the AKS cluster")
             aks_create = az(['aks', 'create', '--service-principal', config['aks']['user'], '--client-secret', config['aks']['password'], '--location', config['aks']['location'], '--resource-group', 'dolos', '--name', 'dolos', '--node-count', '1', '--kubernetes-version', '1.11.5', '--generate-ssh-keys'])
