@@ -1,2 +1,2 @@
-azure-cli==2.0.53
+azure-cli==2.0.61
 requests==2.20.0
